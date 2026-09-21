@@ -1,0 +1,10 @@
+__pycache__/
+*.log
+hush_state.json
+bin/
+server.py.bak
+server.py.v1
+index.html
+script.js
+styles.css
+.DS_Store

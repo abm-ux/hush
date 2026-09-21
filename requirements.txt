@@ -1,0 +1,1 @@
+# hush runs on the python standard library alone - no dependencies
