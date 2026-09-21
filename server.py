@@ -1180,7 +1180,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/start":
             self._go("/setup")
         elif path == "/setup":
-            self._send_html(setup_page(OWNER))
+            # every visitor claims a fresh room - the owner's code is never handed out
+            self._send_html(setup_page(new_code()))
         elif path == "/manifest.json":
             self._send_json(MANIFEST)
         elif path == "/sw.js":
@@ -1190,9 +1191,11 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/new":
             # mint a fresh throwaway room code
             self._go("/monitor/" + new_code())
-        elif path in ("/monitor", "/history"):
-            # the parent's own stable room
-            self._go("/" + ("monitor" if path != "/history" else "history") + "/" + OWNER)
+        elif path == "/monitor":
+            # no bare path leads to the owner's room - mint a fresh one instead
+            self._go("/monitor/" + new_code())
+        elif path == "/history":
+            self._go("/setup")
         elif path.startswith("/monitor/"):
             self._send_html(monitor_page(path.split("/")[-1].upper()))
         elif path.startswith("/watch/"):
