@@ -817,7 +817,7 @@ def watch_page(code):
     <div class='card'>
       <div style='display:flex;justify-content:space-between;align-items:baseline'>
         <div><span class='eyebrow'>this session</span><h2>timeline</h2></div>
-        <span id='badge' class='hint'>0 events</span>
+        <span id='badge' class='hint'>0 cries</span>
       </div>
       <ul class='tl' id='tl'><li class='dim'>waiting for activity</li></ul>
     </div>
@@ -840,11 +840,17 @@ function tickSleep(){const st=$('sleepText');if(!quietSince){st.hidden=true;retu
   st.hidden=false;$('sleepFor').textContent=fmtDur(Date.now()/1000+clockOff-quietSince);}
 setInterval(tickSleep,1000);
 function setTick(v){const p=Math.max(0,Math.min(100,((v+60)/60)*100));$('thrtick').style.left='calc('+p+'% - 1px)';}
+function fmtClock(s){return new Date(s*1000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}).toLowerCase();}
+function fmtGap(s){const m=Math.round(s/60);if(m<1)return 'moments';if(m<60)return m+'m';return Math.floor(m/60)+'h '+(m%60)+'m';}
 function renderTimeline(){tl.innerHTML='';
-  if(!el.events.length){tl.innerHTML='<li class=\\'dim\\'>no loud events yet</li>';return;}
-  el.events.slice().reverse().forEach(e=>{const li=document.createElement('li');
-    li.innerHTML='<span>'+e.t+'</span><span class=\\'dim\\'>loud '+e.d.toFixed(1)+'s</span>';tl.appendChild(li);});
-  badge.textContent=el.events.length+(el.events.length===1?' event':' events');}
+  if(!el.events.length){tl.innerHTML='<li class=\\'dim\\'>no cries yet</li>';return;}
+  const evs=el.events.slice().reverse();
+  evs.forEach((e,i)=>{const li=document.createElement('li');
+    let r='cried '+Math.round(e.d)+'s';
+    const prev=evs[i+1];
+    if(prev)r+=' · '+fmtGap(e.s-(prev.s+prev.d))+' after last';
+    li.innerHTML='<span>'+fmtClock(e.s)+'</span><span class=\\'dim\\'>'+r+'</span>';tl.appendChild(li);});
+  badge.textContent=el.events.length+(el.events.length===1?' cry':' cries');}
 function updateWait(){if(!el.active){waitText.textContent='quiet';waitfill.style.width='0%';return;}
   const cryMs=Date.now()-el.active.start;const frac=Math.min(1,cryMs/(el.wait*1000));
   const left=el.wait*1000-cryMs;waitfill.style.width=(frac*100)+'%';
@@ -855,7 +861,7 @@ setInterval(updateWait,500);
 // webrtc downlink: tap to hear the nursery, tap again to mute
 let pc=null,audioEl=null,soundOn=false;
 const wid='w'+Math.random().toString(36).slice(2,9);
-function setSnd(on,label){$('sndBtn').textContent=on?'sound on - tap to mute':'turn sound on';if(label)$('sndHint').textContent=label;}
+function setSnd(on,label){$('sndBtn').textContent=on?'mute':'turn sound on';if(label)$('sndHint').textContent=label;}
 async function makeOffer(){
   if(pc){try{pc.close();}catch(e){}}
   pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
@@ -897,7 +903,7 @@ es.onmessage=e=>{const d=JSON.parse(e.data);
     if(d.candidate&&pc)pc.addIceCandidate(d.candidate).catch(()=>{});
     return;
   }
-  if(d.type==='init'){el.events=(d.events||[]).map(x=>({t:new Date(x.start*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),d:x.dur}));
+  if(d.type==='init'){el.events=(d.events||[]).map(x=>({s:x.start,d:x.dur}));
     el.wait=d.settings?d.settings.wait:300;if(d.settings)setTick(d.settings.threshold);
     if(d.level&&d.level>-99){stateText.textContent='listening';stateText.className='pill live';}
     else{stateText.textContent='waiting for the nursery';stateText.className='pill';}
@@ -909,7 +915,7 @@ es.onmessage=e=>{const d=JSON.parse(e.data);
   if(d.type==='settings'){el.wait=d.wait;if(d.threshold!==undefined)setTick(d.threshold);}
   if(d.type==='cry_start'){el.active={start:d.start*1000};orb.classList.add('alert');stateText.textContent='alert - loud noise starting';stateText.className='pill alert';quietSince=null;tickSleep();updateWait();}
   if(d.type==='cry_end'){orb.classList.remove('alert');stateText.textContent='quiet';stateText.className='pill live';
-    if(d.recorded)el.events.push({t:new Date(d.start*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),d:d.dur});
+    if(d.recorded)el.events.push({s:d.start,d:d.dur});
     el.active=null;quietSince=d.start+d.dur;renderTimeline();updateWait();tickSleep();}
   if(d.type==='session_end'){stateText.textContent='monitoring stopped';stateText.className='pill';orb.classList.remove('alert');quietSince=null;tickSleep();}
 };
