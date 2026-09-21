@@ -294,13 +294,6 @@ LANDING_CSS = """
   .step:hover{transform:translateY(-4px);border-color:var(--line2)}
   .step h3{margin:2px 0 8px;font-size:1.05rem;font-weight:600}
   .step p{margin:0;color:var(--muted);font-size:.9rem;line-height:1.6}
-  .feature{background:linear-gradient(180deg,rgba(255,255,255,.025),transparent),var(--card);border:1px solid var(--line);
-           border-radius:20px;padding:24px;transition:transform .18s ease,border-color .18s ease}
-  .feature:hover{transform:translateY(-4px);border-color:var(--line2)}
-  .feature .ic{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
-               font-size:1.15rem;background:rgba(69,217,190,.1);border:1px solid rgba(69,217,190,.2)}
-  .feature h3{margin:14px 0 8px;font-size:1rem;font-weight:600}
-  .feature p{margin:0;color:var(--muted);font-size:.88rem;line-height:1.6}
   .join{position:relative;overflow:hidden;text-align:center;padding:46px 28px;max-width:560px;margin:0 auto}
   .join:before{content:'';position:absolute;inset:0;background:radial-gradient(420px 200px at 50% -60px,rgba(69,217,190,.12),transparent 70%);pointer-events:none}
   .join h2{font-family:var(--serif);font-weight:600;font-size:1.8rem;margin:0 0 8px;letter-spacing:-.01em}
@@ -356,21 +349,6 @@ def landing_page():
       <div class='step rise'><h3>claim your code</h3><p>one link is the whole system - generate it once and it stays yours</p></div>
       <div class='step rise'><h3>put hush on your home screen</h3><p>save your link to the home screen and it opens like an app - full screen, one tap away</p></div>
       <div class='step rise'><h3>leave your phone</h3><p>the spare phone stays by the crib and keeps listening - walk away, and text the link to anyone who should hear it</p></div>
-    </div>
-  </section>
-
-  <section class='sec'>
-    <div class='sec-h rise'>
-      <h2>built around how you already parent</h2>
-      <p>the small things that matter at 3am</p>
-    </div>
-    <div class='grid g3'>
-      <div class='feature rise'><span class='ic'>📵</span><h3>no monitor to buy</h3><p>use a phone you already own - no accessories, no separate screen</p></div>
-      <div class='feature rise'><span class='ic'>🔋</span><h3>light on battery</h3><p>it listens quietly and only reaches out when something happens, instead of streaming video all day</p></div>
-      <div class='feature rise'><span class='ic'>🔑</span><h3>your code, your circle</h3><p>partners and grandparents join from any browser - share it like a spare key</p></div>
-      <div class='feature rise'><span class='ic'>⏳</span><h3>self-soothe window</h3><p>choose how long a cry runs before hush tells you to go in</p></div>
-      <div class='feature rise'><span class='ic'>🌙</span><h3>sleep history</h3><p>naps, night wakes and quiet stretches, gathered into a gentle log</p></div>
-      <div class='feature rise'><span class='ic'>🎚️</span><h3>tuned by you</h3><p>sensitivity, minimum cry length and your own intervene-after window</p></div>
     </div>
   </section>
 
