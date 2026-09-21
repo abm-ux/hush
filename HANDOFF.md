@@ -1,0 +1,26 @@
+# Hush — Handoff Summary (v2, publish edition)
+
+**Goal:** "the baby monitor you already own" - a spare phone becomes the nursery listener; anyone with a 6-char code (or the one link) can watch/listen live from any browser. No app installs, no accounts, no purchases. Name: **hush** (lowercase). Dark midnight theme, teal/green palette, amber→teal gradient accents, coral alerts, Fraunces serif display + Inter UI.
+
+**Stack:** single-file Python stdlib server `babymonitor/server.py` (`ThreadingHTTPServer`), zero dependencies. SSE for live status/timeline, **WebRTC for watcher audio** (peer-to-peer mic stream; server only relays signaling via `POST /rtc` over the SSE channel). State: in-memory rooms + persistence to `hush_state.json` (stable owner room = `OWNER`, settings, up to 200 sessions).
+
+**Pages:** `/` landing (hero "the baby monitor you already own", 2 phones · 1 unique code · 0 purchases numerals, 3 steps mirroring setup, join-by-code card) · `/setup` (3 animated steps: generate my code w/ scramble reveal + copy link → add to home screen w/ ios/android toggle → leave your phone) · `/monitor/CODE` NURSERY = setup surface only: orb is start (subline "to listen"), stop button under orb, "copy link to share & listen" (no URL shown), hidden-until-started status pill, live dB number, sensitivity card (threshold + min cry length, human captions + quiet-room tip), soothe card (window length slider + white/brown/off noise + volume). No timeline/countdown here by design. · `/watch/CODE` WATCHER = all observation: orb/pill, dB meter w/ threshold tick, **sound on/off toggle (WebRTC audio)**, remote white-noise control (two-way sync), self-soothe countdown, timeline, "reconnecting" state on SSE drop · `/history/CODE` "sleep history": day-grouped week bars (teal, no cry overlay), stats = total sleep this week / avg nap / avg wake-ups / avg time to fall asleep / avg night sleep (sessions starting ≥18:00 or <03:00), sessions table · `/CODE` = chooser "which device is this?" (one-link architecture: one URL, device picks its role) · `/brand` logo board · `/new` mint throwaway room · `/monitor`,`/history` redirect to owner room · `/start` → `/setup` · branded 404 ("nothing but quiet here").
+
+**PWA:** `/manifest.json`, `/icon.svg` (orb), `/sw.js` registered on every page - **push handler + notificationclick already stubbed in**; needs VAPID keys + subscribe endpoint + real HTTPS to go live.
+
+**API:** `POST /report` {level,crying} (server owns sessions: start/stop, events, wakeups, cry_time, **settle_secs** = session start → first cry end, persisted) · `POST /settings` {threshold,wait,minDur} (broadcast) · `POST /stop` · `POST /rtc` (broadcasts {type:'rtc',...}: offer/answer/candidate, cmd:'noise' from watcher→nursery, noise state from nursery→watcher, hello on nursery start) · `GET /events` SSE - **starts with a 4KB padding comment to defeat proxy buffering**, then init {level,settings,events} then live stream · `GET /api/history?room=`.
+
+**Key patterns:** `get_room(code)` + `broadcast(room,payload)` w/ per-subscriber queues · pages via `_page(title,css,body,js).replace("__CODE__",code)` (never f-strings around JS braces) · JS `$()` helper · epoch-second timestamps · nursery subscribes to its own SSE for rtc/noise commands · copy rules: lowercase, hyphens not em dashes, no trailing periods.
+
+**Publish state (the next chat's job):**
+- git repo initialized at `/Users/abm/Random/babymonitor`, 4 commits, clean tree
+- `.gitignore` excludes: hush_state.json, *.log, bin/, backups, old MVP files (index.html/script.js/styles.css), __pycache__
+- `Procfile` = `web: python3 server.py` · empty `requirements.txt` (python-detection marker) · `README.md` w/ deploy notes
+- server reads **`PORT`** env (default 8080) and **`STATE_FILE`** env (default local file) - verified working
+- **Remaining steps:** 1) create GitHub repo named `hush` 2) `git branch -M main` → add remote → `git push -u origin main` 3) Railway: sign in w/ GitHub → new project → deploy from repo (auto-detects python via requirements.txt, starts via Procfile, assigns https URL) 4) add Railway volume mounted at `/data` + env var `STATE_FILE=/data/hush_state.json` (else room code + history reset on each redeploy) 5) optional custom domain later
+
+**Deploy gotchas:** must be an always-on process host (Railway/Fly/Render always-on tier) - **NOT Vercel/serverless** (kills SSE + in-memory rooms) · WebRTC uses Google public STUN; restrictive cell networks may need a TURN relay later · cloudflared quick tunnels BUFFER SSE bodies (don't use); pinggy ssh tunnel streams fine but expires in 60 min (dev only) · phone mic requires https (localhost ok, plain LAN-IP http is not) · once hosted, history lives on the hosted server - privacy copy was already softened accordingly.
+
+**Roadmap queue:** PWA push pass (VAPID + subscribe endpoint) → "last night" summary card → two-way talk (talk back to nursery) → TURN relay → thin App Store wrapper for discovery. Competitive analysis + marketing wedges in `COMPETITIVE_MATRIX.md`.
+
+**Local run:** `python3 server.py` → localhost:8080 · restart: `pkill -f server.py` then relaunch · seeded sample history lives in gitignored `hush_state.json` (owner room 2DL716).
