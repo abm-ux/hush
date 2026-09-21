@@ -21,6 +21,7 @@ Run:  python3 server.py   then open http://localhost:8080
 """
 
 import json
+import os
 import queue
 import random
 import string
@@ -72,7 +73,6 @@ def broadcast(room, payload):
 
 
 # --- persistence: a stable "my room" so history tracks across restarts ---
-import os
 STATE_FILE = os.environ.get(
     "STATE_FILE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "hush_state.json")
 )
