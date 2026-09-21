@@ -764,6 +764,8 @@ WATCH_CSS = """
   .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#22c55e,#eab308,#f87171);border-radius:999px;transition:width 120ms linear;overflow:hidden}
   .tick{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--teal);opacity:.9;border-radius:1px;pointer-events:none}
   .metercap{display:flex;justify-content:space-between;color:var(--faint);font-size:.7rem}
+  .sleeptime{color:var(--teal);font-size:.88rem;margin:8px 0 0}
+  .sleeptime span{font-family:var(--serif);font-size:1.3rem;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em}
   .waittrack{height:10px;background:#0a1120;border-radius:999px;overflow:hidden;border:1px solid var(--line);margin-top:10px}
   .waittrack i{display:block;height:100%;width:0%;background:var(--teal);border-radius:999px;transition:width 300ms linear}
   #waitText{color:var(--muted);font-size:.9rem;min-height:1.3em;margin-top:12px}
@@ -784,6 +786,7 @@ def watch_page(code):
       <div class='orb' id='orb'></div>
       <div><span class='pill' id='stateText'>connecting</span></div>
       <p id='levelText'> -  dB</p>
+      <p id='sleepText' class='sleeptime' hidden>asleep for <span id='sleepFor'></span></p>
     </div>
     <div class='bar'><i id='bar'></i><span class='tick' id='thrtick'></span></div>
     <div class='metercap'><span>quiet</span><span>loud</span></div>
@@ -828,6 +831,14 @@ const orb=$('orb'),stateText=$('stateText'),levelText=$('levelText'),bar=$('bar'
       tl=$('tl'),badge=$('badge'),waitText=$('waitText'),waitfill=$('waitfill');
 const el={events:[],active:null,wait:300};
 function fmt(s){s=Math.max(0,Math.round(s||0));const m=Math.floor(s/60),ss=s%60;return m+':'+String(ss).padStart(2,'0');}
+let quietSince=null,clockOff=0;
+function fmtDur(s){s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
+  if(h)return h+'h '+String(m).padStart(2,'0')+'m';
+  if(m)return m+'m '+String(ss).padStart(2,'0')+'s';
+  return ss+'s';}
+function tickSleep(){const st=$('sleepText');if(!quietSince){st.hidden=true;return;}
+  st.hidden=false;$('sleepFor').textContent=fmtDur(Date.now()/1000+clockOff-quietSince);}
+setInterval(tickSleep,1000);
 function setTick(v){const p=Math.max(0,Math.min(100,((v+60)/60)*100));$('thrtick').style.left='calc('+p+'% - 1px)';}
 function renderTimeline(){tl.innerHTML='';
   if(!el.events.length){tl.innerHTML='<li class=\\'dim\\'>no loud events yet</li>';return;}
@@ -890,15 +901,17 @@ es.onmessage=e=>{const d=JSON.parse(e.data);
     el.wait=d.settings?d.settings.wait:300;if(d.settings)setTick(d.settings.threshold);
     if(d.level&&d.level>-99){stateText.textContent='listening';stateText.className='pill live';}
     else{stateText.textContent='waiting for the nursery';stateText.className='pill';}
-    renderTimeline();}
+    clockOff=(d.now||Date.now()/1000)-Date.now()/1000;quietSince=d.quiet_since||null;
+    if(d.crying&&d.cry_start){el.active={start:d.cry_start*1000};orb.classList.add('alert');stateText.textContent='alert - loud noise starting';stateText.className='pill alert';updateWait();}
+    renderTimeline();tickSleep();}
   if(d.type==='state'){const lv=d.level,pct=Math.max(0,Math.min(100,((lv+60)/60)*100));bar.style.width=pct+'%';
     levelText.textContent=(lv<=-99?' - ':lv.toFixed(0)+' dB');}
   if(d.type==='settings'){el.wait=d.wait;if(d.threshold!==undefined)setTick(d.threshold);}
-  if(d.type==='cry_start'){el.active={start:d.start*1000};orb.classList.add('alert');stateText.textContent='alert - loud noise starting';stateText.className='pill alert';updateWait();}
+  if(d.type==='cry_start'){el.active={start:d.start*1000};orb.classList.add('alert');stateText.textContent='alert - loud noise starting';stateText.className='pill alert';quietSince=null;tickSleep();updateWait();}
   if(d.type==='cry_end'){orb.classList.remove('alert');stateText.textContent='quiet';stateText.className='pill live';
-    el.events.push({t:new Date(d.start*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),d:d.dur});
-    el.active=null;renderTimeline();updateWait();}
-  if(d.type==='session_end'){stateText.textContent='monitoring stopped';stateText.className='pill';orb.classList.remove('alert');}
+    if(d.recorded)el.events.push({t:new Date(d.start*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}),d:d.dur});
+    el.active=null;quietSince=d.start+d.dur;renderTimeline();updateWait();tickSleep();}
+  if(d.type==='session_end'){stateText.textContent='monitoring stopped';stateText.className='pill';orb.classList.remove('alert');quietSince=null;tickSleep();}
 };
 es.onerror=()=>{stateText.textContent='reconnecting';stateText.className='pill';};
 """
@@ -1240,15 +1253,17 @@ class Handler(BaseHTTPRequestHandler):
                     broadcast(room, {"type": "cry_start", "start": now})
                 else:
                     dur = now - room["cry_start"]
-                    if dur >= room["settings"]["minDur"]:
+                    recorded = dur >= room["settings"]["minDur"]
+                    if recorded:
                         room["events"].append({"start": room["cry_start"], "dur": round(dur, 1)})
                         if room["settle_at"] is None:
                             room["settle_at"] = now
                         room["cry_time"] += round(dur, 1)
                         room["wakeups"] += 1
-                        broadcast(room, {"type": "cry_end", "start": room["cry_start"], "dur": round(dur, 1)})
                         if code == OWNER:
                             save_state()
+                    # always close the alert for watchers - only recorded cries hit the timeline
+                    broadcast(room, {"type": "cry_end", "start": room["cry_start"], "dur": round(dur, 1), "recorded": recorded})
             broadcast(room, {"type": "state", "level": round(level, 1)})
 
         elif path == "/settings":
@@ -1301,7 +1316,17 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         # padding comment defeats proxy response buffering (ignored by EventSource)
         self._chunk(": " + (" " * 4096) + "\n\n")
-        init = {"type": "init", "level": room["level"], "settings": room["settings"], "events": room["events"]}
+        init = {"type": "init", "level": room["level"], "settings": room["settings"],
+                "events": room["events"], "now": time.time()}
+        if room["session_open"]:
+            if room["crying"]:
+                init["crying"] = True
+                init["cry_start"] = room.get("cry_start")
+            elif room["events"]:
+                last = room["events"][-1]
+                init["quiet_since"] = last["start"] + last["dur"]
+            else:
+                init["quiet_since"] = room["session_start"]
         self._chunk("data: " + json.dumps(init) + "\n\n")
         try:
             while True:
