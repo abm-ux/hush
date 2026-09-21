@@ -140,7 +140,7 @@ SHARED_CSS = """
   .nav a.nl{color:var(--muted);text-decoration:none;font-size:.9rem;font-weight:500;padding:7px 12px;border-radius:999px}
   .nav a.nl:hover{color:var(--text);background:rgba(255,255,255,.05)}
   .nav .spacer{flex:1}
-  .navcta{padding:9px 18px;font-size:.85rem;margin-left:8px}
+
   .wrap{max-width:1120px;margin:0 auto;padding:0 24px}
   .narrow{max-width:620px;margin:0 auto}
   .card{background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0)),var(--card);
@@ -199,8 +199,7 @@ SHARED_CSS = """
   body{overflow-x:hidden}
   @media (max-width:640px){
     .navin{padding:11px 16px}
-    .nav a.nl{display:none}
-    .navcta{padding:8px 14px;font-size:.82rem}
+    .nav a.nl{font-size:.82rem;padding:6px 7px}
     .logo{font-size:1.4rem}
     .card{padding:18px;border-radius:16px}
     .wrap{padding:0 16px}
@@ -229,12 +228,11 @@ def _page(title, css="", body="", js="", narrow=False):
             "<nav class='nav'><div class='navin'>"
             "<a href='/' class='logo'><span class='dot'></span><span>hush</span></a>"
             "<span class='spacer'></span>"
-            "<a class='nl' href='/'>home</a><a class='nl' href='/monitor'>nursery</a><a class='nl' href='/history'>history</a>"
-            "<a class='btn navcta' href='/setup'>set up now</a>"
+            "<a class='nl' href='/setup'>set up</a><a class='nl' href='/monitor'>nursery</a><a class='nl' href='/history'>sleep log</a>"
             "</div></nav>" + body +
             "<footer class='foot'><div class='wrap footin'>"
             "<a href='/' class='logo'><span class='dot'></span><span>hush</span></a>"
-            "<span class='flinks'><a href='/'>home</a><a href='/setup'>setup</a><a href='/monitor'>nursery</a><a href='/history'>history</a><a href='/brand'>brand</a></span>"
+            "<span class='flinks'><a href='/setup'>set up</a><a href='/monitor'>nursery</a><a href='/history'>sleep log</a><a href='/brand'>brand</a></span>"
             "<span class='fnote'>no accounts · no downloads · nothing to buy</span>"
             "</div></footer>"
             "<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js');}</script>"
