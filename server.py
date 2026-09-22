@@ -530,7 +530,7 @@ def setup_page(code):
         <h2>leave your phone</h2>
         <ol class='how'>
           <li>on the spare phone, open your link and tap "this phone stays with the baby"</li>
-          <li>tap start, allow the mic, plug it in, and angle it at the crib</li>
+          <li>tap start, allow the mic, plug it in, and angle it at the crib - hush keeps the screen on while it listens</li>
           <li>text your link to anyone who should listen - it opens in any browser</li>
         </ol>
       </div>
@@ -586,6 +586,9 @@ MONITOR_CSS = """
   .code-xl{font-size:1.6rem;font-weight:700;letter-spacing:.28em;color:var(--teal);font-variant-numeric:tabular-nums}
   .roombox{display:flex;gap:10px;align-items:center;background:#0a1120;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:14px}
   .roombox span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #dimmer{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .35s;z-index:99;
+          display:flex;align-items:center;justify-content:center;color:var(--teal-deep);font-size:.78rem;letter-spacing:.22em;text-transform:uppercase}
+  #dimmer.on{opacity:.97;pointer-events:auto}
 """
 
 
@@ -597,6 +600,7 @@ def monitor_page(code):
       <div class='code-xl' style='margin-top:8px'>__CODE__</div>
       <button class='orb off' id='orb' aria-label='start listening'>start<span class='orbsub'>to listen</span></button>
       <div><button class='btn stop' id='stopBtn' disabled style='margin-top:12px;padding:9px 22px;font-size:.85rem'>stop</button></div>
+      <div><button class='btn ghost' id='dimBtn' style='margin-top:10px;padding:9px 22px;font-size:.82rem;display:none'>dim screen</button></div>
       <div><span class='pill' id='stateText' style='display:none'></span></div>
       <p id='levelText'>- dB</p>
       <div class='roombox' style='justify-content:center'>
@@ -630,8 +634,9 @@ def monitor_page(code):
       <div class='set' style='margin-top:8px'><label>volume</label><input type='range' id='nvol' min='0' max='1' step='0.05' value='0.5'><span id='nvolL'>50%</span></div>
     </div>
 
-    <p class='hint' style='text-align:center;margin:14px 0 0'>the mic listens while this page is open</p>
+    <p class='hint' id='keepHint' style='text-align:center;margin:14px 0 0'>plug it in and leave this page open - hush keeps the screen on while it listens</p>
   </div>
+  <div id='dimmer'></div>
 """
     js = """
 const CODE='__CODE__';
@@ -639,6 +644,11 @@ const $=id=>document.getElementById(id);
 const orb=$('orb'),stateText=$('stateText'),levelText=$('levelText');
 const el={active:null,wait:300,started:false,stream:null};
 let analyser=null;
+// a locked screen suspends the mic - hold a wake lock while listening
+let wl=null;
+async function keepAwake(){try{wl=await navigator.wakeLock.request('screen');}catch(e){wl=null;}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&el.started)keepAwake();});
+if(!('wakeLock' in navigator))$('keepHint').textContent='plug it in and leave this page open - and in settings, set auto-lock to never so the screen stays on';
 
 function db(){if(!analyser)return -100;const b=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(b);
   let s=0;for(let i=0;i<b.length;i++)s+=b[i]*b[i];const r=Math.sqrt(s/b.length);if(r<0.00001)return -100;return 20*Math.log10(r);}
@@ -662,6 +672,7 @@ async function start(){
   el.started=true;el.wait=+$('wait').value;
   $('stopBtn').disabled=false;orb.classList.remove('off');orb.textContent='';
   stateText.style.display='inline-flex';stateText.textContent='listening';stateText.className='pill live';postSettings();
+  keepAwake();$('dimBtn').style.display='inline-block';
   fetch('/rtc?room='+CODE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hello:true,from:'nursery',to:'all'})});
   setInterval(async()=>{
     const lv=db();levelText.textContent=lv.toFixed(0)+' dB';
@@ -680,11 +691,14 @@ async function stop(){
   $('stopBtn').disabled=true;orb.classList.add('off');
   orb.innerHTML='start<span class=\\'orbsub\\'>to listen</span>';
   stateText.textContent='stopped';stateText.className='pill';
+  if(wl){try{wl.release();}catch(e){}wl=null;}$('dimBtn').style.display='none';
   Object.keys(pcs).forEach(k=>{try{pcs[k].close();}catch(e){}delete pcs[k];});
   await fetch('/stop?room='+CODE,{method:'POST'});
 }
 $('stopBtn').addEventListener('click',stop);
 $('orb').addEventListener('click',()=>{if(!el.started)start();});
+$('dimBtn').addEventListener('click',()=>{$('dimmer').textContent='listening - tap anywhere to wake';$('dimmer').classList.add('on');});
+$('dimmer').addEventListener('click',()=>$('dimmer').classList.remove('on'));
 // soothe noise: white or brown, generated on-device with web audio
 let nctx=null,nsrc=null,ngain=null;
 function mknoise(type){const len=2*nctx.sampleRate;const buf=nctx.createBuffer(1,len,nctx.sampleRate);const d=buf.getChannelData(0);
@@ -831,7 +845,7 @@ const orb=$('orb'),stateText=$('stateText'),levelText=$('levelText'),bar=$('bar'
       tl=$('tl'),badge=$('badge'),waitText=$('waitText'),waitfill=$('waitfill');
 const el={events:[],active:null,wait:300};
 function fmt(s){s=Math.max(0,Math.round(s||0));const m=Math.floor(s/60),ss=s%60;return m+':'+String(ss).padStart(2,'0');}
-let quietSince=null,clockOff=0;
+let quietSince=null,clockOff=0,lastNursery=0,esOk=true;
 function fmtDur(s){s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
   if(h)return h+'h '+String(m).padStart(2,'0')+'m';
   if(m)return m+'m '+String(ss).padStart(2,'0')+'s';
@@ -839,6 +853,9 @@ function fmtDur(s){s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math
 function tickSleep(){const st=$('sleepText');if(!quietSince){st.hidden=true;return;}
   st.hidden=false;$('sleepFor').textContent=fmtDur(Date.now()/1000+clockOff-quietSince);}
 setInterval(tickSleep,1000);
+// if the nursery phone dies or locks, say so instead of going silently stale
+setInterval(()=>{if(esOk&&lastNursery&&Date.now()-lastNursery>6000&&!orb.classList.contains('alert')){
+  stateText.textContent='nursery may have stopped - check the phone';stateText.className='pill';}},2000);
 function setTick(v){const p=Math.max(0,Math.min(100,((v+60)/60)*100));$('thrtick').style.left='calc('+p+'% - 1px)';}
 function fmtClock(s){return new Date(s*1000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}).toLowerCase();}
 function fmtGap(s){const m=Math.round(s/60);if(m<1)return 'moments';if(m<60)return m+'m';return Math.floor(m/60)+'h '+(m%60)+'m';}
@@ -894,7 +911,7 @@ $('nbrown').addEventListener('click',()=>sendNoise('brown'));
 $('noff').addEventListener('click',()=>sendNoise('off'));
 $('nvol').addEventListener('input',()=>{const v=+$('nvol').value;$('nvolL').textContent=Math.round(v*100)+'%';if(nmode!=='off')sendNoise(nmode);});
 const es=new EventSource('/events?room='+CODE);
-es.onmessage=e=>{const d=JSON.parse(e.data);
+es.onmessage=e=>{esOk=true;const d=JSON.parse(e.data);
   if(d.type==='rtc'){
     if(d.hello){if(soundOn)makeOffer();return;}
     if(d.noise!==undefined){markNoise(d.noise);if(d.vol!=null){$('nvol').value=d.vol;$('nvolL').textContent=Math.round(d.vol*100)+'%';}return;}
@@ -905,21 +922,22 @@ es.onmessage=e=>{const d=JSON.parse(e.data);
   }
   if(d.type==='init'){el.events=(d.events||[]).map(x=>({s:x.start,d:x.dur}));
     el.wait=d.settings?d.settings.wait:300;if(d.settings)setTick(d.settings.threshold);
-    if(d.level&&d.level>-99){stateText.textContent='listening';stateText.className='pill live';}
+    if(d.level&&d.level>-99){stateText.textContent='listening';stateText.className='pill live';lastNursery=Date.now();}
     else{stateText.textContent='waiting for the nursery';stateText.className='pill';}
     clockOff=(d.now||Date.now()/1000)-Date.now()/1000;quietSince=d.quiet_since||null;
     if(d.crying&&d.cry_start){el.active={start:d.cry_start*1000};orb.classList.add('alert');stateText.textContent='alert - loud noise starting';stateText.className='pill alert';updateWait();}
     renderTimeline();tickSleep();}
   if(d.type==='state'){const lv=d.level,pct=Math.max(0,Math.min(100,((lv+60)/60)*100));bar.style.width=pct+'%';
-    levelText.textContent=(lv<=-99?' - ':lv.toFixed(0)+' dB');}
+    levelText.textContent=(lv<=-99?' - ':lv.toFixed(0)+' dB');
+    if(lv>-99){lastNursery=Date.now();if(stateText.textContent.indexOf('may have stopped')>-1){stateText.textContent='listening';stateText.className='pill live';}}}
   if(d.type==='settings'){el.wait=d.wait;if(d.threshold!==undefined)setTick(d.threshold);}
   if(d.type==='cry_start'){el.active={start:d.start*1000};orb.classList.add('alert');stateText.textContent='alert - loud noise starting';stateText.className='pill alert';quietSince=null;tickSleep();updateWait();}
   if(d.type==='cry_end'){orb.classList.remove('alert');stateText.textContent='quiet';stateText.className='pill live';
     if(d.recorded)el.events.push({s:d.start,d:d.dur});
     el.active=null;quietSince=d.start+d.dur;renderTimeline();updateWait();tickSleep();}
-  if(d.type==='session_end'){stateText.textContent='monitoring stopped';stateText.className='pill';orb.classList.remove('alert');quietSince=null;tickSleep();}
+  if(d.type==='session_end'){stateText.textContent='monitoring stopped';stateText.className='pill';orb.classList.remove('alert');quietSince=null;tickSleep();lastNursery=0;}
 };
-es.onerror=()=>{stateText.textContent='reconnecting';stateText.className='pill';};
+es.onerror=()=>{esOk=false;stateText.textContent='reconnecting';stateText.className='pill';};
 """
     return _page("watch", WATCH_CSS, body, js).replace("__CODE__", code)
 
